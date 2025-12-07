@@ -94,7 +94,9 @@
             {
               "identifier": "http:default",
               "allow": [
-                { "url": "https://daily-cloudcode-pa.sandbox.googleapis.com" }
+                {
+                  "url": "https://daily-cloudcode-pa.sandbox.googleapis.com"
+                }
               ]
             }
           ]

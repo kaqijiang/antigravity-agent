@@ -1,8 +1,8 @@
 use std::sync::Mutex;
 use tauri::{
-    image::Image,
-    tray::{MouseButton, TrayIcon, TrayIconBuilder, TrayIconEvent},
-    AppHandle, Manager,
+  image::Image,
+  tray::{MouseButton, TrayIcon, TrayIconBuilder, TrayIconEvent},
+  AppHandle, Manager,
 };
 
 use super::events::handle_menu_event;

@@ -1,12 +1,10 @@
 import React, {useState} from 'react';
-import {Calendar, Check, Clock, Copy, Key, Settings, User, X} from 'lucide-react';
+import {Check, Copy, Key, Settings, User} from 'lucide-react';
 import type {AntigravityAccount} from '@/commands/types/account.types';
-import {BaseDialog, BaseDialogContent, BaseDialogHeader, BaseDialogTitle,} from '@/components/base-ui/BaseDialog';
 import {BaseButton} from '@/components/base-ui/BaseButton';
 import {cn} from '@/utils/utils';
 import {logger} from '@/utils/logger';
-import {useAvailableModels} from "@/modules/use-available-models.ts";
-import {QuotaDashboard} from "@/components/business/QuotaDashboard.tsx";
+import {Modal} from "antd";
 
 interface BusinessUserDetailProps {
   isOpen: boolean;
@@ -24,7 +22,7 @@ const BusinessUserDetail: React.FC<BusinessUserDetailProps> = ({
   // 复制到剪贴板功能
   const copyToClipboard = async (text: string, fieldName: string) => {
     try {
-      await navigator.clipboard.writeText(text);
+      await navigator.clipboard.writeText(user[fieldName]);
       setCopiedField(fieldName);
       setTimeout(() => setCopiedField(null), 2000);
     } catch (error) {
@@ -101,6 +99,7 @@ const BusinessUserDetail: React.FC<BusinessUserDetailProps> = ({
     label: string;
     value: string;
     copyable?: boolean;
+    copyText?: string;
     fieldName?: string;
     isMultiline?: boolean;
   }) => (
@@ -137,80 +136,55 @@ const BusinessUserDetail: React.FC<BusinessUserDetailProps> = ({
 
   if (!user) return null;
 
-  const avatarUrl = getAvatarUrl(user.profile_url);
-
   return (
-    <BaseDialog open={isOpen} onOpenChange={onOpenChange}>
-      <BaseDialogContent className="max-w-lg p-0 overflow-hidden bg-white dark:bg-gray-950 border border-gray-100 dark:border-gray-800 shadow-2xl">
-        <BaseDialogHeader className="px-5 py-4 border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/50">
-          <div className="flex items-center justify-between">
-            <BaseDialogTitle className="text-base font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-              <User className="h-4 w-4 text-gray-500" />
-              <span>用户详情</span>
-            </BaseDialogTitle>
-          </div>
-        </BaseDialogHeader>
-
-        <div className="p-5 space-y-6 max-h-[70vh] overflow-y-auto">
-          {/* 用户头像和基本信息 */}
-          <div className="flex items-center gap-4">
-            <img
-              src={avatarUrl}
-              alt={user.name}
-              className="h-16 w-16 rounded-full object-cover border-2 border-gray-100 dark:border-gray-800"
-            />
-            <div className="flex-1">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                {user.name}
-              </h3>
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                {user.email}
-              </p>
-            </div>
-          </div>
-
-          <div className="h-px bg-gray-100 dark:bg-gray-800" />
-
-          <InfoItem
-            icon={<Key className="h-4 w-4 text-orange-500" />}
-            label="API 密钥"
-            value={"****"}
-            copyable
-            fieldName="api_key"
+    <Modal
+      footer={null}
+      open={isOpen}
+      onCancel={() => onOpenChange(false)}
+      title={<div className={"flex flex-row items-center gap-0.5"}>
+        <User className="h-4 w-4 text-gray-500"/>
+        <span>用户详情</span>
+      </div>}
+    >
+      <div className="p-5 space-y-6 max-h-[70vh] overflow-y-auto">
+        {/* 用户头像和基本信息 */}
+        <div className="flex items-center gap-4">
+          <img
+            src={user.profile_url}
+            alt={user.name}
+            className="h-16 w-16 rounded-full object-cover border-2 border-gray-100 dark:border-gray-800"
           />
-
-          <div className="h-px bg-gray-100 dark:bg-gray-800" />
-
-          <div className="space-y-3">
-            <InfoItem
-              icon={<Calendar className="h-4 w-4 text-indigo-500" />}
-              label="创建时间"
-              value={`${formatDateTime(user.created_at)} (${getRelativeTime(user.created_at)})`}
-              fieldName="created_at"
-            />
-
-            <InfoItem
-              icon={<Clock className="h-4 w-4 text-cyan-500" />}
-              label="最后切换"
-              value={`${formatDateTime(user.last_switched)} (${getRelativeTime(user.last_switched)})`}
-              fieldName="last_switched"
-            />
+          <div className="flex-1">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+              {user.name}
+            </h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              {user.email}
+            </p>
           </div>
-
-          <div className="h-px bg-gray-100 dark:bg-gray-800" />
-
-          {/* 用户设置 */}
-          <InfoItem
-            icon={<Settings className="h-4 w-4 text-gray-500" />}
-            label="设置数据"
-            value={user.user_settings}
-            copyable
-            fieldName="user_settings"
-            isMultiline
-          />
         </div>
-      </BaseDialogContent>
-    </BaseDialog>
+
+        <div className="h-px bg-gray-100 dark:bg-gray-800"/>
+
+        <InfoItem
+          icon={<Key className="h-4 w-4 text-orange-500"/>}
+          label="API 密钥"
+          value={"****"}
+          copyable
+          fieldName="api_key"
+        />
+
+        {/* 用户设置 */}
+        <InfoItem
+          icon={<Settings className="h-4 w-4 text-gray-500"/>}
+          label="设置数据"
+          value={user.user_settings}
+          copyable
+          fieldName="user_settings"
+          isMultiline
+        />
+      </div>
+    </Modal>
   );
 };
 

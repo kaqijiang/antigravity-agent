@@ -4,11 +4,10 @@ import {useAntigravityAccount} from './modules/use-antigravity-account.ts';
 import {DATABASE_EVENTS, useDbMonitoringStore} from './modules/db-monitoring-store';
 import {useAntigravityIsRunning} from './hooks/useAntigravityIsRunning';
 import {Toaster} from 'react-hot-toast';
-import AppToolbar from './AppToolbar.tsx';
+import AppToolbar from './components/app/AppToolbar.tsx';
 import {TooltipProvider} from './components/ui/tooltip';
-import {AppUserPanel} from "@/AppUserPanel.tsx";
-import {AppGlobalLoader} from "@/AppGlobalLoader.tsx";
-import {AntigravityStatusScreen} from "@/components/business/AntigravityStatusScreen";
+import {AppContent} from "@/components/app/AppContent.tsx";
+import {AppLoader} from "@/components/app/AppLoader.tsx";
 import {PlatformCommands} from "@/commands/PlatformCommands.ts";
 
 function App() {
@@ -75,23 +74,18 @@ function App() {
     );
   }
 
-  // 如果未运行
-  if (!antigravityIsRunning.isRunning) {
-    return <AntigravityStatusScreen onRetry={() => antigravityIsRunning.checkStatus()} />;
-  }
-
   return <>
     <TooltipProvider>
       <AppToolbar />
       <div className="container">
-        <AppUserPanel />
+        <AppContent />
       </div>
     </TooltipProvider>
     <Toaster
       position="bottom-right"
       reverseOrder={false}
     />
-    <AppGlobalLoader />
+    <AppLoader />
   </>;
 }
 

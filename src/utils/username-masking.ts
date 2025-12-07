@@ -29,7 +29,7 @@ export const maskEmail = (email: string): string => {
 
   // @符号前超过2个字符，显示首字符 + * + 尾字符
   let stars = '';
-  for (let i = 0; i < localPart.length - 2; i++) {
+  for (let i = 0; i < 6; i++) {
     stars += '*';
   }
   return localPart.charAt(0) + stars + localPart.charAt(localPart.length - 1) + domainPart;
