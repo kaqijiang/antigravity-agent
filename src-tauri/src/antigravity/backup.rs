@@ -24,7 +24,7 @@ use crate::path_utils::AppPaths;
 pub fn smart_backup_antigravity_account(email: &str) -> Result<(String, bool), String> {
     tracing::info!("🔧 执行智能备份（完整 Marker 模式），邮箱: {}", email);
 
-    let config_dir = AppPaths::backup_dir().ok_or("无法获取备份目录")?;
+    let config_dir = crate::directories::get_accounts_directory();
     fs::create_dir_all(&config_dir).map_err(|e| e.to_string())?;
 
     // 简单的覆盖逻辑：每个邮箱只保留一个备份

@@ -53,13 +53,8 @@ pub mod database {
     ];
 }
 
-/// 路径常量
+/// 路径常量（保留部分可能用到的）
 pub mod paths {
-    /// 配置目录名称
-    pub const CONFIG_DIR_NAME: &str = ".antigravity-agent";
-
-    /// 窗口状态文件
-    pub const WINDOW_STATE_FILE: &str = "window_state.json";
 }
 
 /// 窗口状态限制

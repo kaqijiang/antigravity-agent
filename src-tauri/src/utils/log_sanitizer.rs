@@ -150,3 +150,9 @@ impl LogSanitizer {
             .to_string()
     }
 }
+
+/// 对日志消息进行脱敏处理的便捷函数
+pub fn sanitize_log_message(message: &str) -> String {
+    let sanitizer = LogSanitizer::new();
+    sanitizer.sanitize(message)
+}

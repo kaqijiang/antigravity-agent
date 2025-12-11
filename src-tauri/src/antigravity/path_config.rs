@@ -1,6 +1,7 @@
 //! Antigravity 路径配置管理模块
 //! 负责保存和读取用户自定义的 Antigravity 可执行文件路径
 
+use crate::directories;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
@@ -21,20 +22,13 @@ impl Default for AntigravityPathConfig {
 }
 
 /// 获取配置文件路径
-fn get_config_file_path() -> Result<PathBuf, String> {
-    let config_dir = dirs::config_dir()
-        .ok_or("无法获取配置目录")?
-        .join(".antigravity-agent");
-
-    // 确保配置目录存在
-    fs::create_dir_all(&config_dir).map_err(|e| format!("创建配置目录失败: {}", e))?;
-
-    Ok(config_dir.join("antigravity_path.json"))
+fn get_config_file_path() -> PathBuf {
+    directories::get_antigravity_path_file()
 }
 
 /// 保存用户自定义可执行文件路径
 pub fn save_custom_executable_path(path: String) -> Result<(), String> {
-    let config_file = get_config_file_path()?;
+    let config_file = get_config_file_path();
     let mut config = read_config().unwrap_or_default();
 
     config.custom_executable_path = Some(path);
@@ -57,7 +51,7 @@ fn write_config(
 
 /// 读取配置文件
 fn read_config() -> Result<AntigravityPathConfig, String> {
-    let config_file = get_config_file_path()?;
+    let config_file = get_config_file_path();
 
     if !config_file.exists() {
         return Ok(AntigravityPathConfig::default());
@@ -81,7 +75,7 @@ pub fn get_custom_executable_path() -> Result<Option<String>, String> {
 /// 清除自定义路径配置
 #[allow(dead_code)]
 pub fn clear_custom_path() -> Result<(), String> {
-    let config_file = get_config_file_path()?;
+    let config_file = get_config_file_path();
 
     if config_file.exists() {
         fs::remove_file(&config_file).map_err(|e| format!("删除配置文件失败: {}", e))?;

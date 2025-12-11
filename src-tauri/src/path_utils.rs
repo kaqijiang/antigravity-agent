@@ -194,18 +194,7 @@ impl AppPaths {
         paths
     }
 
-    /// 获取配置目录
-    ///
-    /// 统一的配置目录获取，避免硬编码
-    pub fn config_dir() -> Option<PathBuf> {
-        config_dir().map(|path| path.join(".antigravity-agent"))
-    }
-
-    /// 获取备份目录
-    pub fn backup_dir() -> Option<PathBuf> {
-        Self::config_dir().map(|path| path.join("antigravity-accounts"))
-    }
-
+  
     // Windows 特定的辅助方法
     #[cfg(target_os = "windows")]
     fn get_program_files_dir() -> Option<PathBuf> {

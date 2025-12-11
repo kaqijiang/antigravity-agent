@@ -1,11 +1,8 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use dirs;
 use std::fs;
-use std::path::PathBuf;
 use tracing_appender::non_blocking::WorkerGuard;
-use tracing_appender::{non_blocking, rolling};
 use tracing_subscriber::prelude::*;
 
 // Modules
@@ -13,6 +10,7 @@ mod antigravity;
 mod app_settings;
 mod config_manager;
 mod constants;
+mod directories;
 mod platform;
 mod system_tray;
 mod utils;
@@ -30,62 +28,35 @@ pub use state::{AntigravityAccount, AppState, ProfileInfo};
 // Use commands
 use crate::commands::*;
 
-/// 获取日志目录路径，与 state.rs 和 logging_commands.rs 保持一致
-fn get_log_directory() -> PathBuf {
-    if cfg!(windows) {
-        // Windows: 优先使用 APPDATA 环境变量
-        std::env::var_os("APPDATA")
-            .map(|appdata| PathBuf::from(appdata).join(".antigravity-agent"))
-            .or_else(|| {
-                // 备用方案：通过用户主目录构建 AppData\Roaming 路径
-                dirs::home_dir().map(|home| {
-                    home.join("AppData")
-                        .join("Roaming")
-                        .join(".antigravity-agent")
-                })
-            })
-            .or_else(|| {
-                // 最后备用：使用系统标准配置目录
-                dirs::config_dir().map(|config| config.join(".antigravity-agent"))
-            })
-            .unwrap_or_else(|| PathBuf::from(".antigravity-agent"))
-            .join("logs")
-    } else {
-        // macOS/Linux: 使用标准配置目录
-        dirs::config_dir()
-            .unwrap_or_else(|| PathBuf::from("."))
-            .join(".antigravity-agent")
-            .join("logs")
-    }
-}
 
 /// 初始化双层日志系统（控制台 + 文件）
 fn init_tracing() -> WorkerGuard {
     // 创建日志目录
-    let log_dir = get_log_directory();
+    let log_dir = crate::directories::get_log_directory();
     if let Err(e) = fs::create_dir_all(&log_dir) {
         eprintln!("警告：无法创建日志目录 {}: {}", log_dir.display(), e);
     }
 
-    // 设置文件 appender（滚动日志文件）
-    let file_appender = rolling::daily(&log_dir, "antigravity-agent");
-    let (non_blocking, guard) = non_blocking(file_appender);
+    // 创建滚动文件写入器（带脱敏）
+    let file_writer = crate::utils::sanitizing_layer::SanitizingFileWriter::new()
+        .expect("无法创建文件写入器");
+    let (non_blocking, guard) = tracing_appender::non_blocking(file_writer);
 
     // 设置控制台和文件双层输出
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::fmt::layer()
-                .with_writer(std::io::stdout)
+                .with_writer(std::io::stdout) // 控制台输出，不脱敏
                 .with_target(false)
                 .compact()
                 .with_ansi(true), // 控制台启用颜色
         )
         .with(
             tracing_subscriber::fmt::layer()
-                .with_writer(non_blocking)
+                .with_writer(non_blocking) // 文件输出，自动脱敏
                 .with_target(true)
                 .with_ansi(false) // 文件不使用颜色代码
-                .json(), // 文件使用 JSON 格式，便于后续处理
+                .compact(), // 使用紧凑格式而非 JSON，便于脱敏处理
         )
         .init();
 
@@ -98,7 +69,7 @@ fn main() {
 
     tracing::info!(target: "app::startup", "🚀 启动 Antigravity Agent");
     tracing::info!(target: "app::startup", "📝 日志系统已初始化（控制台 + 文件）");
-    tracing::info!(target: "app::startup", "📁 日志目录: {}", get_log_directory().display());
+  tracing::info!(target: "app::startup", "📁 日志目录: {}", crate::directories::get_log_directory().display());
 
     // 记录系统启动信息
     crate::utils::tracing_config::log_system_info();
@@ -157,8 +128,6 @@ fn main() {
             is_database_monitoring_running,
             start_database_monitoring,
             stop_database_monitoring,
-            get_log_info,
-            clear_logs,
             decrypt_config_data,
             encrypt_config_data,
             write_text_file,

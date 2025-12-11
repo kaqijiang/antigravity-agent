@@ -3,3 +3,4 @@
 pub mod log_decorator;
 pub mod log_sanitizer;
 pub mod tracing_config;
+pub mod sanitizing_layer;

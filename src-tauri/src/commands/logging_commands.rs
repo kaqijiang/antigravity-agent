@@ -1,84 +1,15 @@
-//! 日志相关命令
-//! 提供日志管理功能
+/// 日志和加密命令
+/// 负责日志管理、文件写入、数据加密解密等功能
 
-use crate::utils::log_sanitizer::LogSanitizer;
-use dirs;
 use std::fs;
+use std::path::Path;
 
-/// 获取日志目录路径
-/// 与 state.rs 中的配置目录保持一致
-fn get_log_directory() -> std::path::PathBuf {
-    if cfg!(windows) {
-        // Windows: 优先使用 APPDATA 环境变量
-        std::env::var_os("APPDATA")
-            .map(|appdata| std::path::PathBuf::from(appdata).join(".antigravity-agent"))
-            .or_else(|| {
-                // 备用方案：通过用户主目录构建 AppData\Roaming 路径
-                dirs::home_dir().map(|home| {
-                    home.join("AppData")
-                        .join("Roaming")
-                        .join(".antigravity-agent")
-                })
-            })
-            .or_else(|| {
-                // 最后备用：使用系统标准配置目录
-                dirs::config_dir().map(|config| config.join(".antigravity-agent"))
-            })
-            .unwrap_or_else(|| std::path::PathBuf::from(".antigravity-agent"))
-            .join("logs")
-    } else {
-        // macOS/Linux: 使用标准配置目录
-        dirs::config_dir()
-            .unwrap_or_else(|| std::path::PathBuf::from("."))
-            .join(".antigravity-agent")
-            .join("logs")
-    }
-}
 
-/// 获取日志文件信息
-/// 返回日志文件路径、大小等信息，用于前端显示状态
-#[tauri::command]
-pub async fn get_log_info() -> Result<LogInfo, String> {
-    let log_dir = get_log_directory();
-    let log_file = log_dir.join("antigravity-agent.log");
-
-    if log_file.exists() {
-        let metadata = fs::metadata(&log_file).map_err(|e| format!("获取文件信息失败: {}", e))?;
-
-        let modified = metadata
-            .modified()
-            .map_err(|e| format!("获取修改时间失败: {}", e))?;
-
-        let modified_str = chrono::DateTime::<chrono::Utc>::from(modified)
-            .format("%Y-%m-%d %H:%M:%S UTC")
-            .to_string();
-
-        Ok(LogInfo {
-            exists: true,
-            path: "日志文件路径".to_string(),
-            size_bytes: metadata.len(),
-            size_human: format_file_size(metadata.len()),
-            last_modified: modified_str,
-        })
-    } else {
-        Ok(LogInfo {
-            exists: false,
-            path: "日志文件路径".to_string(),
-            size_bytes: 0,
-            size_human: "0 B".to_string(),
-            last_modified: "不存在".to_string(),
-        })
-    }
-}
-
-/// 清空日志文件
-/// 删除当前日志文件内容，但保留文件本身
+/// 写入文本文件
+/// 将文本内容写入指定路径的文件
 #[tauri::command]
 pub async fn write_text_file(path: String, content: String) -> Result<String, String> {
     crate::log_async_command!("write_text_file", async {
-        use std::fs;
-        use std::path::Path;
-
         let file_path = Path::new(&path);
 
         // 确保父目录存在
@@ -87,192 +18,127 @@ pub async fn write_text_file(path: String, content: String) -> Result<String, St
         }
 
         // 写入文件
-        fs::write(&file_path, content).map_err(|e| format!("写入文件失败: {}", e))?;
+        fs::write(file_path, content)
+            .map_err(|e| format!("写入文件失败: {}", e))?;
 
-        tracing::info!("📝 文件写入成功: {}", path);
-        Ok("文件写入成功".to_string())
+        Ok(format!("文件写入成功: {}", path))
     })
 }
 
-/// 解密配置数据 - 接收文件路径
-/// 直接读取文件并进行解密，避免前端传输大文件
-#[tauri::command]
-pub async fn decrypt_config_data(file_path: String, password: String) -> Result<String, String> {
-    crate::log_async_command!("decrypt_config_data", async {
-        use base64::{engine::general_purpose::STANDARD, Engine as _};
-        use tokio::fs as tokio_fs;
-
-        // 读取文件内容
-        let file_content = tokio_fs::read(&file_path)
-            .await
-            .map_err(|e| format!("读取文件失败: {}", e))?;
-
-        if file_content.is_empty() {
-            return Err("文件内容为空".to_string());
-        }
-
-        // 转换为字符串处理
-        let file_string =
-            String::from_utf8(file_content).map_err(|e| format!("文件编码错误: {}", e))?;
-        let file_size = file_string.len();
-
-        // 检测文件是否为 Base64 编码（加密文件）
-        let encrypted_content = if file_string.trim_start().starts_with('{') {
-            // 如果是 JSON 格式，直接使用（未加密文件）
-            file_string
-        } else {
-            // 如果是 Base64 格式，进行解码
-            let encrypted = STANDARD
-                .decode(file_string.trim())
-                .map_err(|e| format!("Base64解码失败: {}", e))?;
-
-            let encrypted_bytes = encrypted;
-            let key_bytes = password.as_bytes();
-            let mut decrypted_bytes = vec![0u8; encrypted_bytes.len()];
-
-            // XOR 解密
-            for (i, &byte) in encrypted_bytes.iter().enumerate() {
-                decrypted_bytes[i] = byte ^ key_bytes[i % key_bytes.len()];
-            }
-
-            String::from_utf8(decrypted_bytes).map_err(|e| format!("UTF-8解码失败: {}", e))?
-        };
-
-        // 验证是否为有效的JSON
-        if serde_json::from_str::<serde_json::Value>(&encrypted_content).is_err() {
-            return Err("解密后的数据不是有效的JSON格式，请检查密码是否正确".to_string());
-        }
-
-        tracing::info!("🔓 配置文件解密成功，文件大小: {} bytes", file_size);
-        Ok(encrypted_content)
-    })
-}
-
-/// 加密配置数据
-/// 接收 JSON 字符串，使用密码进行 XOR 加密，返回 Base64 编码的字符串
+/// 加密配置数据（使用 XOR 算法）
+/// 将配置数据使用密码进行异或加密
 #[tauri::command]
 pub async fn encrypt_config_data(json_data: String, password: String) -> Result<String, String> {
     crate::log_async_command!("encrypt_config_data", async {
-        use base64::{engine::general_purpose::STANDARD, Engine as _};
+        use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 
-        // 验证是否为有效的JSON
-        if serde_json::from_str::<serde_json::Value>(&json_data).is_err() {
-            return Err("输入的数据不是有效的JSON格式".to_string());
+        if password.is_empty() {
+            return Err("密码不能为空".to_string());
         }
 
-        // 使用 XOR 加密
-        let data_bytes = json_data.as_bytes();
-        let key_bytes = password.as_bytes();
-        let mut encrypted_bytes = vec![0u8; data_bytes.len()];
+        let password_bytes = password.as_bytes();
+        let mut result = Vec::new();
 
-        for (i, &byte) in data_bytes.iter().enumerate() {
-            encrypted_bytes[i] = byte ^ key_bytes[i % key_bytes.len()];
+        // XOR 加密
+        for (i, byte) in json_data.as_bytes().iter().enumerate() {
+            let key_byte = password_bytes[i % password_bytes.len()];
+            result.push(byte ^ key_byte);
         }
 
         // Base64 编码
-        let encrypted_base64 = STANDARD.encode(&encrypted_bytes);
+        let encoded = BASE64.encode(&result);
 
-        tracing::info!("🔐 配置文件加密成功，数据大小: {} bytes", data_bytes.len());
-        Ok(encrypted_base64)
+        Ok(encoded)
     })
 }
 
+/// 解密配置数据（使用 XOR 算法）
+/// 将加密的配置数据使用密码进行解密
 #[tauri::command]
-pub async fn clear_logs() -> Result<String, String> {
-    crate::log_async_command!("clear_logs", async {
-        let log_dir = get_log_directory();
-        let log_file = log_dir.join("antigravity-agent.log");
+pub async fn decrypt_config_data(encrypted_data: String, password: String) -> Result<String, String> {
+  crate::log_async_command!("decrypt_config_data", async {
+        use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 
-        if log_file.exists() {
-            // 备份当前日志（可选）
-            let backup_path = log_dir.join("antigravity-agent.backup.log");
-            if let Ok(_) = fs::copy(&log_file, &backup_path) {
-                tracing::info!("📦 日志已备份");
-            }
-
-            // 清空日志文件
-            fs::write(&log_file, "").map_err(|e| format!("清空日志文件失败: {}", e))?;
-
-            tracing::info!("🗑️ 日志文件已清空");
-            Ok("日志文件已清空".to_string())
-        } else {
-            Err("日志文件不存在".to_string())
+        if password.is_empty() {
+            return Err("密码不能为空".to_string());
         }
+
+        // Base64 解码
+        let decoded = BASE64
+            .decode(encrypted_data)
+            .map_err(|_| "Base64 解码失败".to_string())?;
+
+        let password_bytes = password.as_bytes();
+        let mut result = Vec::new();
+
+        // XOR 解密
+        for (i, byte) in decoded.iter().enumerate() {
+            let key_byte = password_bytes[i % password_bytes.len()];
+            result.push(byte ^ key_byte);
+        }
+
+        // 转换为字符串
+        let decrypted = String::from_utf8(result)
+            .map_err(|_| "解密失败，数据可能已损坏".to_string())?;
+
+        Ok(decrypted)
     })
 }
 
-/// 写入前端日志到统一日志系统
-/// 使用智能脱敏处理，与后端日志统一写入文件
+/// 写入前端日志
+/// 将前端日志条目写入到后端日志系统
 #[tauri::command]
-pub async fn write_frontend_log(log_entry: serde_json::Value) -> Result<(), String> {
-    let sanitizer = LogSanitizer::new();
+pub async fn write_frontend_log(logEntry: serde_json::Value) -> Result<(), String> {
+  use tracing::{error, info, warn, debug};
 
-    // 提取字段
-    let level = log_entry["level"].as_str().unwrap_or("info");
-    let message = log_entry["message"].as_str().unwrap_or("no message");
-    let details = log_entry["details"].as_str();
-    let session_id = log_entry["sessionId"].as_str().unwrap_or("unknown");
+  // 解析日志级别
+  let level = logEntry.get("level")
+    .and_then(|v| v.as_str())
+    .unwrap_or("info");
 
-    // 统一脱敏处理
-    let sanitized_message = sanitizer.sanitize(message);
-    let sanitized_details = details.map(|d| sanitizer.sanitize(d));
+  // 解析消息
+  let message = logEntry.get("message")
+    .and_then(|v| v.as_str())
+    .unwrap_or("");
 
+  // 解析模块名
+  let module = logEntry.get("module")
+    .and_then(|v| v.as_str())
+    .unwrap_or("frontend");
+
+  // 解析额外的数据
+  let extra_data = logEntry.get("data");
+
+  // 构建完整的日志消息
+  let full_message = if let Some(data) = extra_data {
+    format!("[{}] {}", module, data)
+  } else {
+    format!("[{}] {}", module, message)
+  };
+
+  // 根据级别输出日志 'info' | 'warn' | 'error' | 'debug'
     match level {
-        "error" => {
-            tracing::error!(
-                target = "frontend",
-                session_id = session_id,
-                details = sanitized_details,
-                "🌐 {}",
-                sanitized_message
-            );
-        }
-        "warn" => {
-            tracing::warn!(
-                target = "frontend",
-                session_id = session_id,
-                details = sanitized_details,
-                "🌐 {}",
-                sanitized_message
-            );
-        }
-        _ => {
-            tracing::info!(
-                target = "frontend",
-                session_id = session_id,
-                details = sanitized_details,
-                "🌐 {}",
-                sanitized_message
-            );
-        }
+      "error" => error!(
+            target = format!("frontend::{}", module),
+            "{}",
+            full_message
+        ),
+      "warn" => warn!(
+            target = format!("frontend::{}", module),
+            "{}",
+            full_message
+        ),
+      "debug" => debug!(
+            target = format!("frontend::{}", module),
+            "{}",
+            full_message
+        ),
+      _ => info!(
+            target = format!("frontend::{}", module),
+            "{}",
+            full_message
+        ),
     }
 
     Ok(())
-}
-
-#[derive(serde::Serialize)]
-pub struct LogInfo {
-    pub exists: bool,
-    pub path: String,
-    pub size_bytes: u64,
-    pub size_human: String,
-    pub last_modified: String,
-}
-
-/// 格式化文件大小显示
-fn format_file_size(bytes: u64) -> String {
-    const UNITS: &[&str] = &["B", "KB", "MB", "GB"];
-    let mut size = bytes as f64;
-    let mut unit_index = 0;
-
-    while size >= 1024.0 && unit_index < UNITS.len() - 1 {
-        size /= 1024.0;
-        unit_index += 1;
-    }
-
-    if unit_index == 0 {
-        format!("{} {}", bytes, UNITS[unit_index])
-    } else {
-        format!("{:.2} {}", size, UNITS[unit_index])
-    }
 }

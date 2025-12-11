@@ -27,7 +27,7 @@ export interface LogInfo {
  */
 export interface FrontendLogEntry {
   /** 日志级别 */
-  level: 'info' | 'warn' | 'error';
+  level: 'info' | 'warn' | 'error' | 'debug';
 
   /** 日志消息 */
   message: string;

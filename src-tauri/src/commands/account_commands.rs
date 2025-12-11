@@ -452,11 +452,8 @@ pub async fn restore_antigravity_account(account_name: String) -> Result<String,
     tracing::debug!(target: "account::restore", account_name = %account_name, "调用 restore_antigravity_account");
 
     // 1. 构建备份文件路径
-    let config_dir = dirs::config_dir()
-        .unwrap_or_else(|| std::path::PathBuf::from("."))
-        .join(".antigravity-agent")
-        .join("antigravity-accounts");
-    let backup_file = config_dir.join(format!("{}.json", account_name));
+    let accounts_dir = crate::directories::get_accounts_directory();
+    let backup_file = accounts_dir.join(format!("{}.json", account_name));
 
     // 2. 调用统一的恢复函数
     crate::antigravity::restore::restore_all_antigravity_data(backup_file).await

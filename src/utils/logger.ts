@@ -1,13 +1,9 @@
 // Console API 风格的前端日志系统
-// 后端统一处理脱敏和写入
+import {LoggingCommands} from "@/commands/LoggingCommands.ts";
+import {FrontendLogEntry} from "@/commands/types/logging.types.ts";
 
 export class Logger {
   private sessionId = Math.random().toString(36).substring(7);
-
-  // 支持 console 风格的参数
-  log(...args: any[]) {
-    this.writeLog('log', ...args);
-  }
 
   info(...args: any[]) {
     this.writeLog('info', ...args);
@@ -25,7 +21,7 @@ export class Logger {
     this.writeLog('debug', ...args);
   }
 
-  private writeLog(level: string, ...args: any[]) {
+  private writeLog(level: FrontendLogEntry["level"], ...args: any[]) {
     // 处理多参数，类似 console.log
     let message = '';
     let details: any;
@@ -62,13 +58,7 @@ export class Logger {
       sessionId: this.sessionId
     };
 
-    // 检查 Tauri API 是否可用，如果可用则异步发送日志到后端
-    if (typeof window !== 'undefined' && window.__TAURI__) {
-      // 异步发送日志，不等待结果，也不阻塞前端执行
-      window.__TAURI__.invoke('write_frontend_log', { logEntry }).catch(() => {
-        // 忽略日志写入错误，避免影响主流程
-      });
-    }
+    LoggingCommands.writeFrontendLog(logEntry);
 
     // 同时输出到浏览器控制台
     const consoleMethod = console[level as keyof Console] || console.log;

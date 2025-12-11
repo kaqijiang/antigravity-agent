@@ -3,9 +3,6 @@ use std::fs;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use tauri::AppHandle;
-use tauri::Manager;
-
-use crate::config_manager::ConfigManager;
 
 /// 应用程序设置
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -53,18 +50,9 @@ pub struct AppSettingsManager {
 
 impl AppSettingsManager {
     /// 创建新的设置管理器
-    pub fn new(app_handle: &AppHandle) -> Self {
-        let config_path = match ConfigManager::new() {
-            Ok(manager) => manager.app_settings_file(),
-            Err(_) => {
-                // 如果 ConfigManager 初始化失败，尝试使用 Tauri 的配置目录
-                app_handle
-                    .path()
-                    .app_config_dir()
-                    .unwrap_or(PathBuf::from("."))
-                    .join("app_settings.json")
-            }
-        };
+    pub fn new(_app_handle: &AppHandle) -> Self {
+        // 使用统一的配置目录
+        let config_path = crate::directories::get_app_settings_file();
 
         // 尝试加载现有设置
         let mut settings = if config_path.exists() {
