@@ -78,7 +78,7 @@ const seedMocks = (
 
   useAccountAdditionData.setState({
     data: additionData,
-    fetchData: async () => {},
+    update: async () => {},
   });
 
   useDbMonitoringStore.setState({

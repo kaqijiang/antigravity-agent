@@ -10,7 +10,7 @@ type State = {
 }
 
 type Actions = {
-  fetchData: (antigravityAccount: AntigravityAccount) => Promise<void>
+  update: (antigravityAccount: AntigravityAccount) => Promise<void>
 }
 
 // 暂时不知道 ultra 定义, 先模糊匹配,
@@ -25,7 +25,7 @@ export interface AccountAdditionData {
 
 export const useAccountAdditionData = create<State & Actions>((setState, getState) => ({
   data: {},
-  fetchData: async (antigravityAccount: AntigravityAccount) => {
+  update: async (antigravityAccount: AntigravityAccount) => {
     let codeAssistResponse: CloudCodeAPITypes.LoadCodeAssistResponse | CloudCodeAPITypes.ErrorResponse = null
 
     try {

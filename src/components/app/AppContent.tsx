@@ -1,4 +1,4 @@
-import React, {useEffect, useState} from "react";
+import React, {useEffect, useRef, useState} from "react";
 import BusinessUserDetail from "@/components/business/AccountDetailModal.tsx";
 import {useAntigravityAccount, useCurrentAntigravityAccount} from "@/modules/use-antigravity-account.ts";
 import {useAccountAdditionData, UserTier} from "@/modules/use-account-addition-data.ts";
@@ -20,7 +20,7 @@ export function AppContent() {
   const [isUserDetailOpen, setIsUserDetailOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<AccountSessionListAccountItem | null>(null);
   const antigravityAccount = useAntigravityAccount();
-  const availableModels = useAccountAdditionData();
+  const accountAdditionData = useAccountAdditionData();
   const currentAntigravityAccount = useCurrentAntigravityAccount();
   const appGlobalLoader = useAppGlobalLoader();
   const [condition, setCondition] = useState<ListToolbarValue>({
@@ -46,13 +46,29 @@ export function AppContent() {
     loadUsers();
   }, []);
 
+  // 定时获取用户额外数据
+  const fetchAccountAdditionDataTimer = useRef(null)
+
   useEffect(() => {
+    if (fetchAccountAdditionDataTimer.current) {
+      clearInterval(fetchAccountAdditionDataTimer.current)
+    }
+
+    fetchAccountAdditionDataTimer.current = setInterval(() => {
+      antigravityAccount.accounts.forEach(user => {
+        accountAdditionData.update(user)
+      })
+    }, 1000 * 30)
+
     antigravityAccount.accounts.forEach(user => {
-      availableModels.fetchData(user)
+      accountAdditionData.update(user)
     })
+
+    return () => {
+      clearInterval(fetchAccountAdditionDataTimer.current)
+    }
   }, [antigravityAccount.accounts]);
 
-  
   // 用户详情处理
   const handleUserClick = (account: AccountSessionListAccountItem) => {
     setSelectedUser(account);
@@ -124,11 +140,11 @@ export function AppContent() {
   };
 
   const accounts: AccountSessionListAccountItem[] = antigravityAccount.accounts.map((account) => {
-    const accountAdditionDatum = availableModels.data[account.context.email]
+    const accountAdditionDatum = accountAdditionData.data[account.context.email]
 
     return {
       geminiQuota: accountAdditionDatum?.geminiQuote ?? -1,
-      claudeQuota: accountAdditionDatum?.geminiQuote ?? -1,
+      claudeQuota: accountAdditionDatum?.claudeQuote ?? -1,
       email: account.context.email,
       nickName: account.context.plan_name,
       userAvatar: accountAdditionDatum?.userAvatar ?? "",
