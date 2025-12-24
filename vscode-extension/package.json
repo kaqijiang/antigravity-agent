@@ -23,8 +23,8 @@
     "contributes": {
         "commands": [
             {
-                "command": "antigravity.openDialog",
-                "title": "Open Accounts Dashboard"
+                "command": "antigravity.agent.open_dashboard",
+                "title": "Open Antigravity Agent Dashboard"
             }
         ]
     },
