@@ -5,10 +5,10 @@
     "version": "1.5.3",
     "icon": "images/icon.png",
     "type": "module",
-    "publisher": "antigravity",
+    "publisher": "MonchiLin",
     "repository": {
         "type": "git",
-        "url": "https://github.com/placeholder/repo"
+        "url": "https://github.com/MonchiLin/antigravity-agent"
     },
     "engines": {
         "vscode": "^1.104.0"

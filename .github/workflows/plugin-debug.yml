@@ -132,7 +132,7 @@ jobs:
             exit 0
           fi
 
-          PACKAGE_NAME="antigravity.antigravity-vscode"
+          PACKAGE_NAME="MonchiLin.antigravity-vscode"
           echo "🔍 Checking Open VSX version for $PACKAGE_NAME..."
           
           # Fetch remote info, mute stderr in case it doesn't exist
