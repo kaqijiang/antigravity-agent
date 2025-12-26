@@ -54,19 +54,18 @@ jobs:
             ⚠️ **注意**：这是自动构建的测试版本，可能不稳定。建议普通用户使用 [正式发布版本](https://github.com/MonchiLin/antigravity-agent/releases/latest)。
 
             ### VS Code 插件
-            - [👉 VSIX插件安装包 (Nightly)](${{ github.server_url }}/${{ github.repository }}/releases/download/autobuild/antigravity-vscode-nightly.vsix)
+            - [VSIX安装包 (Nightly)](${{ github.server_url }}/${{ github.repository }}/releases/download/autobuild/antigravity-vscode-nightly.vsix)
             
             ### Windows
-            - **安装版**（推荐）: [Antigravity.Agent_x64-setup.exe](${{ github.server_url }}/${{ github.repository }}/releases/download/autobuild/Antigravity.Agent_x64-setup.exe) - 支持自动更新
-            - **便携版**: [Antigravity-Agent-x86_64-Portable.zip](${{ github.server_url }}/${{ github.repository }}/releases/download/autobuild/Antigravity-Agent-x86_64-Portable.zip) - 解压即用，无需安装
-            
+            - [安装版(推荐)](${{ github.server_url }}/${{ github.repository }}/releases/download/autobuild/Antigravity.Agent_x64-setup.exe) | [便携版](${{ github.server_url }}/${{ github.repository }}/releases/download/autobuild/Antigravity-Agent-x86_64-Portable.zip)
+
             ### macOS
-            - **Apple Silicon (M1/M2)**: [Antigravity.Agent_aarch64.dmg](${{ github.server_url }}/${{ github.repository }}/releases/download/autobuild/Antigravity.Agent_aarch64.dmg)
-            - **Intel Mac**: [Antigravity.Agent_x86_64.dmg](${{ github.server_url }}/${{ github.repository }}/releases/download/autobuild/Antigravity.Agent_x86_64.dmg)
+            - [Apple Silicon](${{ github.server_url }}/${{ github.repository }}/releases/download/autobuild/Antigravity.Agent_aarch64.dmg) | [Intel芯片](${{ github.server_url }}/${{ github.repository }}/releases/download/autobuild/Antigravity.Agent_x86_64.dmg)
             
             ### Linux
-            - **AppImage**: [antigravity-agent_amd64.AppImage](${{ github.server_url }}/${{ github.repository }}/releases/download/autobuild/antigravity-agent_amd64.AppImage) - 通用格式，适用于所有发行版
-            - **Debian/Ubuntu**: [antigravity-agent_amd64.deb](${{ github.server_url }}/${{ github.repository }}/releases/download/autobuild/antigravity-agent_amd64.deb)
+            **AppImage(通用 推荐)**
+            - [Antigravity_Agent.AppImage](${{ github.server_url }}/${{ github.repository }}/releases/download/autobuild/antigravity-agent_amd64.AppImage)
+            - [Antigravity_Agent.deb](${{ github.server_url }}/${{ github.repository }}/releases/download/autobuild/antigravity-agent_amd64.deb)
             ---
 
             🐛 如果发现问题或者需求请求，请[提交 Issue](https://github.com/MonchiLin/antigravity-agent/issues/new)
