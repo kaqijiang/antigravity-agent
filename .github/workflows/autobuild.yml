@@ -129,6 +129,7 @@ jobs:
         working-directory: ./vscode-extension
         run: npm ci
 
+      - name: Build and Package Extension (Nightly)
         working-directory: ./vscode-extension
         # Use dynamic filename based on package.json version
         run: npx @vscode/vsce package --out ./antigravity-vscode-nightly.vsix
