@@ -63,6 +63,7 @@ export const AccountCard: React.FC<AccountCardProps> = ({ account, data, isCurre
                     {!isCurrent && (
                         <VSCodeButton
                             appearance="secondary"
+                            className="h-6"
                             onClick={() => onSwitch(account.context.email)}
                         >
                             {t('common:actions.switch')}
