@@ -2,11 +2,13 @@
 
 # Antigravity Agent
 
+[English](docs/README.en.md) | 简体中文
+
 **轻松管理您的 Antigravity 多账户**
 
 [![Windows](https://img.shields.io/badge/Windows-0078D6?style=for-the-badge&logo=windows&logoColor=white)](../../releases)
 [![macOS](https://img.shields.io/badge/macOS-000000?style=for-the-badge&logo=apple&logoColor=white)](../../releases)
-[![Linux](https://img.shields.io/badge/Linux-FCC624?style=for-the-badge&logo=linux&logoColor=black)](../../releases)
+[![Ubuntu](https://img.shields.io/badge/Ubuntu-E95420?style=for-the-badge&logo=ubuntu&logoColor=white)](../../releases)
 
 <br />
 
