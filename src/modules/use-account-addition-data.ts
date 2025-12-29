@@ -1,9 +1,7 @@
-﻿import {create} from "zustand";
-import {AntigravityAccount} from "@/commands/types/account.types.ts";
-import {CloudCodeAPI} from "@/services/cloudcode-api.ts";
-import {CloudCodeAPITypes} from "@/services/cloudcode-api.types.ts";
-import {AccountCommands} from "@/commands/AccountCommands.ts";
-import {ProcessCommands} from "@/commands/ProcessCommands.ts";
+﻿import { create } from "zustand";
+import { AntigravityAccount } from "@/commands/types/account.types.ts";
+import { AccountMetricsCommands } from "@/commands/AccountMetricsCommands.ts";
+import { logger } from "@/lib/logger";
 
 type State = {
   data: Record<string, AccountAdditionData>
@@ -13,12 +11,17 @@ type Actions = {
   update: (antigravityAccount: AntigravityAccount) => Promise<void>
 }
 
-// 暂时不知道 ultra 定义, 先模糊匹配,
 export type UserTier = 'free-tier' | 'g1-pro-tier' | 'g1-ultra-tier';
 
 export interface AccountAdditionData {
-  geminiQuote: number
+  geminiProQuote: number
+  geminiProQuoteRestIn: string
+  geminiFlashQuote: number
+  geminiFlashQuoteRestIn: string
+  geminiImageQuote: number
+  geminiImageQuoteRestIn: string
   claudeQuote: number
+  claudeQuoteRestIn: string
   userAvatar: string
   userId: string
 }
@@ -26,49 +29,50 @@ export interface AccountAdditionData {
 export const useAccountAdditionData = create<State & Actions>((setState, getState) => ({
   data: {},
   update: async (antigravityAccount: AntigravityAccount) => {
-    let codeAssistResponse: CloudCodeAPITypes.LoadCodeAssistResponse | CloudCodeAPITypes.ErrorResponse = null
+    const email = antigravityAccount.context.email;
 
     try {
-      codeAssistResponse = await CloudCodeAPI.loadCodeAssist(antigravityAccount.auth.access_token);
-    } catch (e) {
-      codeAssistResponse = e
-    }
+      logger.debug(`开始获取账户指标 (Rust Singular): ${email}`);
 
-    // 如果存在错误, 则使用 ouath 重新获取 access token
-    if ("error" in codeAssistResponse) {
+      const metric = await AccountMetricsCommands.getAccountMetrics(email);
 
-      // 避免冲突 如果是当前账户, 并且 Antigravity 在运行, 则不刷新 access token
-      const currentAccount = await AccountCommands.getCurrentAntigravityAccount()
-      const isAntigravityRunning = await ProcessCommands.isRunning()
-      if (antigravityAccount.context.email === currentAccount?.context.email && isAntigravityRunning) {
-        return
-      }
-      // 刷新 access token
-      const refreshTokenResponse = await CloudCodeAPI.refreshAccessToken(antigravityAccount.auth.id_token);
-      // 更新一下内存里面的 access token, 这里就不写入本地了
-      antigravityAccount.auth.access_token = refreshTokenResponse.access_token;
-    }
+      // 映射 Rust 数据结构 -> 前端 Store 结构
+      // 注意：后端返回的 quotas 数组需要转换为具名字段
+      const findQuota = (name: string) => {
+        const item = metric.quotas.find(q => q.model_name.includes(name));
+        return {
+          percentage: item ? item.percentage : -1,
+          resetText: item ? item.reset_text : ""
+        };
+      };
 
-    // 先模糊匹配下 tier 的定义, 因为我也知不道具体是啥
-    if (antigravityAccount.context.plan.slug.includes("ultra")) {
-      antigravityAccount.context.plan.slug = "g1-ultra-tier";
-    }
+      const geminiPro = findQuota("Gemini Pro");
+      const geminiFlash = findQuota("Gemini Flash");
+      const geminiImage = findQuota("Gemini Image");
+      const claude = findQuota("Claude");
 
-    codeAssistResponse = await CloudCodeAPI.loadCodeAssist(antigravityAccount.auth.access_token);
+      logger.debug(`获取账户指标成功 (Rust Singular): ${email}`);
 
-    const modelsResponse = await CloudCodeAPI.fetchAvailableModels(antigravityAccount.auth.access_token, codeAssistResponse.cloudaicompanionProject);
-    const userInfoResponse = await CloudCodeAPI.userinfo(antigravityAccount.auth.access_token);
-
-    setState({
-      data: {
-        ...getState().data,
-        [antigravityAccount.context.email]: {
-          geminiQuote: modelsResponse.models["gemini-3-pro-high"].quotaInfo.remainingFraction,
-          claudeQuote: modelsResponse.models["claude-opus-4-5-thinking"].quotaInfo.remainingFraction,
-          userAvatar: userInfoResponse.picture,
-          userId: userInfoResponse.id,
+      setState({
+        data: {
+          ...getState().data,
+          [email]: {
+            geminiProQuote: geminiPro.percentage,
+            geminiProQuoteRestIn: geminiPro.resetText,
+            geminiFlashQuote: geminiFlash.percentage,
+            geminiFlashQuoteRestIn: geminiFlash.resetText,
+            geminiImageQuote: geminiImage.percentage,
+            geminiImageQuoteRestIn: geminiImage.resetText,
+            claudeQuote: claude.percentage,
+            claudeQuoteRestIn: claude.resetText,
+            userAvatar: metric.avatar_url,
+            userId: metric.user_id,
+          }
         }
-      }
-    })
+      });
+
+    } catch (error) {
+      logger.error(`获取账户指标失败 (Rust): ${email}`, error);
+    }
   }
 }))

@@ -1,12 +1,15 @@
-import React, {useEffect, useState} from 'react';
-import {EyeOff, FileCode, Monitor, Settings, VolumeX} from 'lucide-react';
-import {open} from '@tauri-apps/plugin-dialog';
-import {getVersion} from '@tauri-apps/api/app';
-import {BaseButton} from '@/components/base-ui/BaseButton';
-import {cn} from '@/lib/utils.ts';
-import {PlatformCommands} from "@/commands/PlatformCommands.ts";
-import {Modal} from "antd";
-import {useAppSettings} from "@/modules/use-app-settings.ts";
+import React, { useEffect, useState } from 'react';
+import { Bug, EyeOff, FileCode, FolderOpen, Monitor, Settings, VolumeX } from 'lucide-react';
+import { open } from '@tauri-apps/plugin-dialog';
+import { getVersion } from '@tauri-apps/api/app';
+import { BaseButton } from '@/components/base-ui/BaseButton';
+import { cn } from '@/lib/utils.ts';
+import { PlatformCommands } from "@/commands/PlatformCommands.ts";
+import { Modal } from "antd";
+import { useAppSettings } from "@/modules/use-app-settings.ts";
+import { LoggingCommands } from "@/commands/LoggingCommands.ts";
+import { useTranslation } from 'react-i18next';
+
 
 interface BusinessSettingsDialogProps {
   isOpen: boolean;
@@ -17,17 +20,21 @@ const BusinessSettingsDialog: React.FC<BusinessSettingsDialogProps> = ({
   isOpen,
   onOpenChange
 }) => {
+  const { t } = useTranslation('settings');
   const [execPath, setExecPath] = useState<string>('');
+  const [logDirPath, setLogDirPath] = useState<string>('');
   const [appVersion, setAppVersion] = useState<string>('');
 
-  
+
   // 应用设置（统一管理）
   const systemTrayEnabled = useAppSettings(state => state.systemTrayEnabled);
   const silentStartEnabled = useAppSettings(state => state.silentStartEnabled);
+  const debugMode = useAppSettings(state => state.debugMode);
   const privateMode = useAppSettings(state => state.privateMode);
 
   const setSystemTrayEnabled = useAppSettings(state => state.setSystemTrayEnabled);
   const setSilentStartEnabled = useAppSettings(state => state.setSilentStartEnabled);
+  const setDebugMode = useAppSettings(state => state.setDebugMode);
   const setPrivateMode = useAppSettings(state => state.setPrivateMode);
 
   const loading = useAppSettings(state => state.loading);
@@ -35,6 +42,7 @@ const BusinessSettingsDialog: React.FC<BusinessSettingsDialogProps> = ({
   useEffect(() => {
     if (isOpen) {
       loadCurrentPaths();
+      loadLogDirectoryPath();
       loadAppVersion();
     }
   }, [isOpen]);
@@ -51,11 +59,20 @@ const BusinessSettingsDialog: React.FC<BusinessSettingsDialogProps> = ({
     if (!finalExecPath) {
       const detectedExec = await PlatformCommands.detectExecutable();
       if (detectedExec.found && detectedExec.path) {
-        finalExecPath = detectedExec.path + ' (自动检测)';
+        finalExecPath = detectedExec.path + t('paths.autoDetected');
       }
     }
 
-    setExecPath(finalExecPath || '未设置');
+    setExecPath(finalExecPath || t('paths.notSet'));
+  };
+
+  const loadLogDirectoryPath = async () => {
+    try {
+      const logPath = await LoggingCommands.getLogDirectoryPath();
+      setLogDirPath(logPath || t('paths.notSet'));
+    } catch (_error) {
+      setLogDirPath(t('paths.notSet'));
+    }
   };
 
   const handleBrowseExecPath = async () => {
@@ -63,10 +80,10 @@ const BusinessSettingsDialog: React.FC<BusinessSettingsDialogProps> = ({
       const result = await open({
         directory: false,
         multiple: false,
-        title: '选择 Antigravity 可执行文件',
+        title: t('dialogs.selectExecutable'),
         filters: [
-          { name: '可执行文件', extensions: ['exe', 'app', ''] },
-          { name: '所有文件', extensions: ['*'] }
+          { name: t('dialogs.executableFilter'), extensions: ['exe', 'app', ''] },
+          { name: t('dialogs.allFilesFilter'), extensions: ['*'] }
         ]
       });
 
@@ -82,17 +99,21 @@ const BusinessSettingsDialog: React.FC<BusinessSettingsDialogProps> = ({
     }
   };
 
+  const handleOpenLogDirectory = async () => {
+    await LoggingCommands.openLogDirectory();
+  };
+
   return (
     <Modal
       open={isOpen}
       footer={null}
       onCancel={() => onOpenChange(false)}
       title={<div className={"flex flex-row items-center gap-1.5"}>
-        <Settings className="h-4 w-4 text-gray-500"/>
-        <span>设置</span>
+        <Settings className="h-4 w-4 text-gray-500" />
+        <span>{t('title')}</span>
         <span
           className="ml-1 text-xs font-mono text-gray-400 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded-full font-normal">
-          v{appVersion}
+          {t('version', { version: appVersion })}
         </span>
       </div>
       }
@@ -101,70 +122,114 @@ const BusinessSettingsDialog: React.FC<BusinessSettingsDialogProps> = ({
         {/* 路径设置组 */}
         <div className="space-y-4">
           <div className="space-y-3">
-            <div className="group">
-              <label
-                className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-1.5 block px-1">Antigravity
-                可执行文件</label>
-              <div className="flex gap-2">
-                <div
-                  className="flex-1 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-md px-3 py-2 text-xs font-mono text-gray-600 dark:text-gray-400 break-all select-all transition-colors group-hover:border-gray-300 dark:group-hover:border-gray-700">
-                  {execPath}
-                </div>
-                <BaseButton
-                  variant="outline"
-                  size="icon"
-                  className="h-[34px] w-[34px] shrink-0 border-gray-200 dark:border-gray-800"
-                  onClick={handleBrowseExecPath}
-                  title="Antigravity 可执行文件"
-                >
-                  <FileCode className="h-4 w-4 text-gray-500"/>
-                </BaseButton>
-              </div>
-            </div>
+            <PathSettingRow
+              label={t('paths.executable')}
+              value={execPath}
+              actionTitle={t('paths.executable')}
+              onAction={handleBrowseExecPath}
+              actionIcon={<FileCode className="h-4 w-4 text-gray-500" />}
+            />
+
+            <PathSettingRow
+              label={t('paths.logDirectory')}
+              value={logDirPath}
+              actionTitle={t('paths.openLogDirectory')}
+              onAction={handleOpenLogDirectory}
+              actionIcon={<FolderOpen className="h-4 w-4 text-gray-500" />}
+            />
           </div>
         </div>
 
-        <div className="h-px bg-gray-100 dark:bg-gray-800"/>
+        <div className="h-px bg-gray-100 dark:bg-gray-800" />
+
+
+
+        <div className="h-px bg-gray-100 dark:bg-gray-800" />
 
         <div className="space-y-1">
           <SettingToggle
-            icon={<Monitor className="h-4 w-4 text-blue-500"/>}
-            title="系统托盘"
-            description="关闭窗口时最小化到托盘"
+            icon={<Monitor className="h-4 w-4 text-blue-500" />}
+            title={t('toggles.systemTray.title')}
+            description={t('toggles.systemTray.description')}
             checked={systemTrayEnabled}
             onChange={setSystemTrayEnabled}
             isLoading={loading.systemTray}
           />
 
           <SettingToggle
-            icon={<VolumeX className="h-4 w-4 text-purple-500"/>}
-            title="静默启动"
-            description="启动时自动隐藏主窗口"
+            icon={<VolumeX className="h-4 w-4 text-purple-500" />}
+            title={t('toggles.silentStart.title')}
+            description={t('toggles.silentStart.description')}
             checked={silentStartEnabled}
             onChange={setSilentStartEnabled}
             isLoading={loading.silentStart}
           />
 
           <SettingToggle
-            icon={<EyeOff className="h-4 w-4 text-emerald-500"/>}
-            title="隐私模式"
-            description="在用户卡片中隐藏邮箱和昵称"
+            icon={<EyeOff className="h-4 w-4 text-emerald-500" />}
+            title={t('toggles.privateMode.title')}
+            description={t('toggles.privateMode.description')}
             checked={privateMode}
             onChange={setPrivateMode}
             isLoading={loading.privateMode}
           />
+
+          <SettingToggle
+            icon={<Bug className="h-4 w-4 text-orange-500" />}
+            title={t('toggles.debugMode.title')}
+            description={t('toggles.debugMode.description')}
+            checked={debugMode}
+            onChange={setDebugMode}
+            isLoading={loading.debugMode}
+          />
         </div>
 
-        <div className="h-px bg-gray-100 dark:bg-gray-800"/>
+        <div className="h-px bg-gray-100 dark:bg-gray-800" />
 
         <div className="space-y-1">
-          <a target={"_blank"} href={"https://github.com/MonchiLin/antigravity-agent/issues"}>遇到问题/请求新功能</a>
+          <a target={"_blank"} href={"https://github.com/MonchiLin/antigravity-agent/issues"}>{t('links.issues')}</a>
         </div>
 
       </div>
     </Modal>
   );
 };
+
+const PathSettingRow = ({
+  label,
+  value,
+  actionTitle,
+  onAction,
+  actionIcon,
+}: {
+  label: React.ReactNode;
+  value: React.ReactNode;
+  actionTitle: string;
+  onAction: () => void;
+  actionIcon: React.ReactNode;
+}) => (
+  <div className="group">
+    <label
+      className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-1.5 block px-1">
+      {label}
+    </label>
+    <div className="flex gap-2">
+      <div
+        className="flex-1 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-md px-3 py-2 text-xs font-mono text-gray-600 dark:text-gray-400 break-all select-all transition-colors group-hover:border-gray-300 dark:group-hover:border-gray-700">
+        {value}
+      </div>
+      <BaseButton
+        variant="outline"
+        size="icon"
+        className="h-[34px] w-[34px] shrink-0 border-gray-200 dark:border-gray-800"
+        onClick={onAction}
+        title={actionTitle}
+      >
+        {actionIcon}
+      </BaseButton>
+    </div>
+  </div>
+);
 
 // 内部组件：设置开关项
 const SettingToggle = ({

@@ -1,16 +1,13 @@
 import React from 'react';
-import {
-  motion,
-  useMotionTemplate,
-  useMotionValue,
-  useSpring
-} from 'framer-motion';
+import { useTranslation } from 'react-i18next';
+import { motion, useMotionTemplate, useMotionValue, useSpring } from 'framer-motion';
 import { Tooltip } from 'antd';
 import { cn } from "@/lib/utils.ts";
 import { Avatar } from "@/components/ui/avatar.tsx";
-import { ArrowLeftRight, Crown, Gem, Trash2 } from 'lucide-react';
+import { ArrowLeftRight, Crown, Gem, Trash2, TriangleAlert } from 'lucide-react';
 import { BaseButton } from "@/components/base-ui/BaseButton.tsx";
-import {Variants} from "motion/react";
+import { Variants } from "motion/react";
+import { LiquidProgressBar } from "@/components/ui/liquid-progress-bar.tsx";
 
 // ==========================================
 // 类型定义
@@ -22,8 +19,14 @@ interface UserSessionCardProps {
   userAvatar: string;
   email: string;
   tier: UserTier;
-  geminiQuota: number | -1;
-  claudeQuota: number | -1;
+  geminiProQuote: number | -1
+  geminiProQuoteRestIn: string
+  geminiFlashQuote: number | -1
+  geminiFlashQuoteRestIn: string
+  geminiImageQuote: number | -1
+  geminiImageQuoteRestIn: string
+  claudeQuote: number | -1
+  claudeQuoteRestIn: string
   isCurrentUser: boolean;
   onSelect: () => void
   onSwitch: () => void
@@ -59,6 +62,13 @@ const tierVisualStyles: Record<UserTier, TierVisualStyles> = {
     WebkitBackdropFilter: 'blur(12px)',
     hoverBoxShadow: '0 0 80px -10px rgba(139, 92, 246, 0.6), 0 30px 60px -10px rgba(139, 92, 246, 0.4), inset 0 0 50px -10px rgba(233, 213, 255, 0.8)',
   },
+};
+
+const unknownStyle: TierVisualStyles = {
+  background: 'repeating-linear-gradient(45deg, #f8fafc, #f8fafc 10px, #f1f5f9 10px, #f1f5f9 20px)',
+  borderColor: '#cbd5e1',
+  boxShadow: 'none',
+  hoverBoxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)',
 };
 
 const tierBadgeMap: Record<UserTier, React.ReactNode> = {
@@ -100,8 +110,14 @@ const childVariants: Variants = {
 };
 
 export function AccountSessionListCard(props: UserSessionCardProps) {
-  const { tier } = props;
-  const { boxShadow, hoverBoxShadow, ...otherStyles } = tierVisualStyles[tier];
+  const { t } = useTranslation(['account', 'common']);
+  let { tier } = props;
+  const unknownTier = !["free-tier", "g1-pro-tier", "g1-ultra-tier"].includes(tier);
+
+  // 如果是未知层级，使用专门定义的未知样式，否则使用对应层级的样式
+  const currentStyles = unknownTier ? unknownStyle : tierVisualStyles[tier];
+
+  const { boxShadow, hoverBoxShadow, ...otherStyles } = currentStyles;
 
   // --- 1. 聚光灯 (Spotlight) 逻辑 ---
   const mouseX = useMotionValue(0);
@@ -122,7 +138,7 @@ export function AccountSessionListCard(props: UserSessionCardProps) {
       onClick={props.onSelect}
       onMouseMove={handleMouseMove}
       className={cn(
-        "group w-[320px] rounded-2xl p-6 border cursor-pointer relative overflow-hidden",
+        "group w-[340px] rounded-2xl px-6 py-5 border cursor-pointer relative overflow-hidden",
         // 移除 hover:shadow-xl，因为我们完全用 JS 控制阴影
       )}
       style={otherStyles}
@@ -146,11 +162,11 @@ export function AccountSessionListCard(props: UserSessionCardProps) {
       }}
     >
 
-      {props.isCurrentUser && (
-        <div className="absolute top-1 right-1 px-2 py-0.5 bg-blue-500 text-white text-[10px] font-bold rounded-full shadow-sm leading-tight z-10">
-          当前
-        </div>
-      )}
+      {props.isCurrentUser && <div title={t('account:tooltip.currentSession')} className="flex items-center gap-1 mt-1 h-2 absolute top-1.5 right-1.5">
+        <div className="w-1 h-2 bg-blue-500 rounded-full animate-[bounce_1s_infinite]"></div>
+        <div className="w-1 h-3 bg-blue-500 rounded-full animate-[bounce_1s_infinite_100ms]"></div>
+        <div className="w-1 h-1.5 bg-blue-500 rounded-full animate-[bounce_1s_infinite_200ms]"></div>
+      </div>}
 
       {/* --- 特效层 A: 聚光灯 (鼠标跟随) --- */}
       <motion.div
@@ -180,7 +196,7 @@ export function AccountSessionListCard(props: UserSessionCardProps) {
 
         {/* 头部区域 */}
         <motion.header
-          className="flex items-center gap-4 mb-4 relative"
+          className="flex items-center gap-4 mb-2 relative"
           variants={childVariants}
         >
           <Avatar
@@ -204,45 +220,62 @@ export function AccountSessionListCard(props: UserSessionCardProps) {
                 </h2>
               </Tooltip>
               <div className="mt-0.5 shrink-0">
-                {tierBadgeMap[tier]}
+                {tierBadgeMap[tier] || <span className="px-1.5 py-0.5 bg-gray-100 text-gray-500 text-[10px] font-bold rounded-md leading-none border border-gray-200 shadow-sm">{t('common:status.unknown')}</span>}
               </div>
             </div>
             <Tooltip title={props.email} styles={{ container: tooltipInnerStyle }}>
-              <p className="text-sm text-slate-500 font-medium line-clamp-2 break-all">{props.email}</p>
+              {/* 高度用于统一一行和两行对其 */}
+              <p className="text-sm text-slate-500 font-medium line-clamp-2 break-all h-[42px]">{props.email}</p>
             </Tooltip>
           </div>
         </motion.header>
 
         {/* 进度条区域 */}
-        <motion.div className="space-y-3" variants={childVariants}>
-          {props.geminiQuota === -1 ? (
+        <motion.div className="space-y-2" variants={childVariants}>
+          {props.geminiProQuote === -1 ? (
             <>
-              <UsageItem
-                label="Gemini"
+              <LiquidProgressBar
+                type="gemini-pro"
                 percentage={-1}
-                color="bg-blue-400"
-                trackColor={tier === 'g1-ultra-tier' ? "bg-blue-100/40" : "bg-blue-50"}
+                resetIn={props.geminiProQuoteRestIn}
               />
-              <UsageItem
-                label="Claude"
+              <LiquidProgressBar
+                type="claude"
                 percentage={-1}
-                color="bg-violet-400"
-                trackColor={tier === 'g1-ultra-tier' ? "bg-violet-100/40" : "bg-violet-50"}
+                resetIn={props.claudeQuoteRestIn}
+              />
+              <LiquidProgressBar
+                type="gemini-flash"
+                percentage={-1}
+                resetIn={props.geminiFlashQuoteRestIn}
+              />
+              <LiquidProgressBar
+                type="gemini-image"
+                percentage={-1}
+                resetIn={props.geminiImageQuoteRestIn}
               />
             </>
           ) : (
             <>
-              <UsageItem
-                label="Gemini"
-                percentage={props.geminiQuota}
-                color="bg-blue-400"
-                trackColor={tier === 'g1-ultra-tier' ? "bg-blue-100/40" : "bg-blue-50"}
+              <LiquidProgressBar
+                type="gemini-pro"
+                percentage={props.geminiProQuote}
+                resetIn={props.geminiProQuoteRestIn}
               />
-              <UsageItem
-                label="Claude"
-                percentage={props.claudeQuota}
-                color="bg-violet-400"
-                trackColor={tier === 'g1-ultra-tier' ? "bg-violet-100/40" : "bg-violet-50"}
+              <LiquidProgressBar
+                type="claude"
+                percentage={props.claudeQuote}
+                resetIn={props.claudeQuoteRestIn}
+              />
+              <LiquidProgressBar
+                type="gemini-flash"
+                percentage={props.geminiFlashQuote}
+                resetIn={props.geminiFlashQuoteRestIn}
+              />
+              <LiquidProgressBar
+                type="gemini-image"
+                percentage={props.geminiImageQuote}
+                resetIn={props.geminiImageQuoteRestIn}
               />
             </>
           )}
@@ -262,7 +295,7 @@ export function AccountSessionListCard(props: UserSessionCardProps) {
             variant="outline"
             leftIcon={<ArrowLeftRight className={"w-3 h-3"} />}
           >
-            使用
+            {t('account:actions.use')}
           </BaseButton>
           <BaseButton
             onClick={e => {
@@ -273,10 +306,26 @@ export function AccountSessionListCard(props: UserSessionCardProps) {
             variant="ghost"
             rightIcon={<Trash2 className={"w-3 h-3"} />}
           >
-            删除
+            {t('account:actions.delete')}
           </BaseButton>
         </motion.div>
       </div>
+      {(unknownTier) && (
+        <div className="absolute bottom-3 right-3 z-50">
+          <Tooltip title={
+            <div className="flex flex-col gap-0.5">
+              <span>
+                {t('account:warning.unknownTier.title')} <span className="font-mono bg-white/10 px-1 rounded">[{props.tier}]</span>
+              </span>
+              <span>
+                {t('account:warning.unknownTier.description')} <a href="https://github.com/MonchiLin/antigravity-agent/issues" target="_blank" rel="noreferrer" className="text-blue-300 hover:text-blue-200 underline decoration-auto underline-offset-2">{t('account:warning.unknownTier.reportLink')}</a>
+              </span>
+            </div>
+          }>
+            <TriangleAlert className="w-4 h-4 text-amber-500/80 hover:text-amber-600 transition-colors cursor-help" />
+          </Tooltip>
+        </div>
+      )}
     </motion.div>
   );
 }
@@ -291,6 +340,7 @@ function UsageItem({ label, percentage, color, trackColor }: {
   color: string,
   trackColor: string
 }) {
+  const { t } = useTranslation('common');
   const isUnknown = percentage === -1;
   const displayPercentage = isUnknown ? 0 : Math.round(percentage * 100);
 
@@ -299,7 +349,7 @@ function UsageItem({ label, percentage, color, trackColor }: {
       <div className="flex justify-between mb-2 text-sm">
         <span className="text-slate-700 font-medium">{label}</span>
         <span className="text-slate-400 font-mono tabular-nums">
-          {isUnknown ? 'Unknown' : `${displayPercentage}%`}
+          {isUnknown ? t('common:status.unknown') : `${displayPercentage}%`}
         </span>
       </div>
       <div className={cn("h-2.5 w-full rounded-full overflow-hidden transition-colors duration-300", trackColor)}>

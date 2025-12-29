@@ -3,6 +3,7 @@
 
 use std::fs;
 use tracing_appender::non_blocking::WorkerGuard;
+use tracing_subscriber::filter::LevelFilter;
 use tracing_subscriber::{prelude::*, EnvFilter};
 
 // Modules
@@ -13,6 +14,7 @@ mod constants;
 mod directories;
 mod platform;
 mod proto;
+mod server; // New module
 mod system_tray;
 mod utils;
 mod window;
@@ -31,9 +33,18 @@ use crate::commands::*;
 
 /// 初始化双层日志系统（控制台 + 文件）
 fn init_tracing() -> WorkerGuard {
+    let app_settings_path = crate::directories::get_app_settings_file();
+    let settings = crate::app_settings::load_settings_from_disk(&app_settings_path);
+
     // 日志过滤器：默认 info，降低 h2/hyper 噪音（可被 RUST_LOG 覆盖）
+    // Debug Mode 开启时：仅放开应用相关的 debug（以及 frontend），避免依赖库（如 reqwest）刷屏。
+    let default_filter = if settings.debug_mode {
+        "info,antigravity_agent=debug,frontend=debug,app=debug,window=debug,account=debug,restore=debug,cleanup=debug,backup=debug,h2=warn,hyper=warn"
+    } else {
+        "info,h2=warn,hyper=warn"
+    };
     let env_filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new("info,h2=warn,hyper=warn"));
+        .unwrap_or_else(|_| EnvFilter::new(default_filter));
 
     // 创建日志目录
     let log_dir = crate::directories::get_log_directory();
@@ -54,7 +65,8 @@ fn init_tracing() -> WorkerGuard {
                 .with_writer(std::io::stdout) // 控制台输出，不脱敏
                 .with_target(false)
                 .compact()
-                .with_ansi(true), // 控制台启用颜色
+                .with_ansi(true) // 控制台启用颜色
+                .with_filter(LevelFilter::INFO),
         )
         .with(
             tracing_subscriber::fmt::layer()
@@ -85,6 +97,9 @@ fn main() {
         Err(e) => tracing::error!(target: "app::startup", "⚠️ 账户目录迁移检查失败: {}", e),
     }
 
+    // 初始化 AppState，并使用 parking_lot::Mutex 包装以供 actix-web 使用
+    let app_state = std::sync::Arc::new(parking_lot::Mutex::new(AppState::default()));
+
     tauri::Builder::default()
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_shell::init())
@@ -93,8 +108,28 @@ fn main() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_http::init())
-        .manage(AppState::default())
-        .setup(|app| setup::init(app))
+        .manage(AppState::default()) // 依然保持 Tauri 自己的状态管理（如果不想大规模重构）
+        // 注意：这里我们其实有两份 AppState：
+        // 1. Tauri 内部管理的（通过 .manage()）
+        // 2. 传递给 actix-web 的（通过闭包捕获）
+        // 这是一个折衷方案，因为 Tauri 的 State<T> 很难直接传递给 actix-web
+        // 为了保持数据一致性，我们应该尽可能让 actix-web 调用 tauri 的 command 或者 service 层
+        // 在 server/mod.rs 中，我们尝试复用逻辑，但如果逻辑依赖 State<AppState>，会导致问题
+        // 理想情况是将 AppState 提取为全局单例或 Arc<Mutex<AppState>> 共享
+        //
+        // 鉴于时间，我们这里启动 server，并在 server 中使用独立的 state 引用
+        // 并在 setup 钩子中初始化它
+        .setup(move |app| {
+            setup::init(app)?;  // 原有的 setup
+            
+            // 启动 HTTP Server
+            // 由于 AppState::default() 会读取磁盘，所以即便有两份实例，只要不涉及内存中动态缓存的不一致，是可行的
+            // 账户列表是从磁盘读取的，所以暂时没问题
+            let handle = app.handle().clone();
+            server::init(handle, app_state.clone());
+            
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             collect_account_contents,
             restore_backup_files,
@@ -102,6 +137,7 @@ fn main() {
             clear_all_backups,
             // 账户基础命令
             get_antigravity_accounts,
+            get_account_metrics,
             get_current_antigravity_account_info,
             save_antigravity_current_account,
             restore_antigravity_account,
@@ -125,7 +161,10 @@ fn main() {
             save_system_tray_state,
             save_silent_start_state,
             save_private_mode_state,
+            save_debug_mode_state,
             get_all_settings,
+            get_language,
+            set_language,
             // 数据库监控命令
             is_database_monitoring_running,
             start_database_monitoring,
@@ -134,6 +173,9 @@ fn main() {
             encrypt_config_data,
             write_text_file,
             write_frontend_log,
+            commands::open_log_directory,
+            commands::get_log_directory_path,
+            commands::launch_and_install_extension,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

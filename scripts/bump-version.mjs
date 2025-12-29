@@ -6,10 +6,17 @@
  * - src-tauri/tauri.conf.json
  * - src-tauri/Cargo.toml
  *
+ * Branch rules:
+ * - If on dev: fail if there are staged changes; otherwise checkout master and merge dev, then continue.
+ * - If on master: continue.
+ * - Any other branch: abort.
+ *
  * Defensive rules:
  * - Refuses to run if working tree is dirty before starting.
  * - After edits, verifies only the four files changed.
  * - Aborts (no commit) if any other file changes.
+ * - Fails if the tag already exists before creating it.
+ * - Pushes branch and tag after committing.
  */
 
 import { readFile, writeFile } from "node:fs/promises";
@@ -24,10 +31,12 @@ const expectedFiles = [
   "package-lock.json",
   path.join("src-tauri", "tauri.conf.json"),
   path.join("src-tauri", "Cargo.toml"),
+  path.join("vscode-extension", "package.json"),
 ];
 
 function run(cmd, opts = {}) {
-  return execSync(cmd, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], ...opts }).trim();
+  const result = execSync(cmd, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], ...opts });
+  return typeof result === "string" ? result.trim() : "";
 }
 
 function fail(message) {
@@ -54,6 +63,30 @@ function ensureCleanTree() {
 
 function normalizePath(p) {
   return p.replace(/\\/g, "/");
+}
+
+function getCurrentBranch() {
+  return run("git rev-parse --abbrev-ref HEAD");
+}
+
+function ensureOnMasterOrMergeFromDev() {
+  const branch = getCurrentBranch();
+  if (branch === "master") {
+    return;
+  }
+
+  if (branch === "dev") {
+    const staged = run("git diff --cached --name-only");
+    if (staged) {
+      fail("Staged changes found on dev. Please commit/reset them before bumping.");
+    }
+    ensureCleanTree();
+    run("git checkout master", { stdio: "inherit" });
+    run("git merge --ff-only dev", { stdio: "inherit" });
+    return;
+  }
+
+  fail(`Current branch "${branch}" is not supported. Use master or dev.`);
 }
 
 function validateVersion(v) {
@@ -124,6 +157,13 @@ async function bumpCargoToml(version) {
   await writeFile(file, lines.join("\n"), "utf8");
 }
 
+async function bumpVsCodeExtension(version) {
+  const file = path.join("vscode-extension", "package.json");
+  const pkg = JSON.parse(await readFile(file, "utf8"));
+  pkg.version = version;
+  await writeFile(file, JSON.stringify(pkg, null, 4) + "\n", "utf8");
+}
+
 function verifyOnlyExpectedChanged() {
   const diffNames = run("git diff --name-only");
   const changed = diffNames ? diffNames.split(/\r?\n/).filter(Boolean) : [];
@@ -158,8 +198,22 @@ function commit(version) {
   });
 }
 
+function ensureTagAvailable(version) {
+  const existing = run(`git tag -l "v${version}"`);
+  if (existing) {
+    fail(`Tag v${version} already exists. Aborting.`);
+  }
+}
+
+function pushBranchAndTag(version) {
+  run("git push origin master", { stdio: "inherit" });
+  run(`git tag v${version}`);
+  run(`git push origin v${version}`, { stdio: "inherit" });
+}
+
 async function main() {
   ensureRepoRoot();
+  ensureOnMasterOrMergeFromDev();
   ensureCleanTree();
 
   const rl = readline.createInterface({
@@ -176,9 +230,12 @@ async function main() {
   await bumpPackageLock(version);
   await bumpTauriConf(version);
   await bumpCargoToml(version);
+  await bumpVsCodeExtension(version);
 
   verifyOnlyExpectedChanged();
+  ensureTagAvailable(version);
   commit(version);
+  pushBranchAndTag(version);
 
   console.log(`✅ Version bumped and committed: ${version}`);
 }
@@ -186,4 +243,3 @@ async function main() {
 main().catch((err) => {
   fail(err?.stack || String(err));
 });
-
